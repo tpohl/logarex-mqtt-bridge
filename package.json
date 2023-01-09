@@ -1,0 +1,12 @@
+{
+  "name": "logarex-mqtt-bridge",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "dependencies": {
+    "@serialport/bindings-cpp": "^10.8.0",
+    "@serialport/stream": "^10.5.0",
+    "mqtt": "^4.3.7"
+  }
+}
