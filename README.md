@@ -1,7 +1,7 @@
 # Home Assistant MQTT Bridge for Logarex Smart Power Meter
 
 Just build it and run it to send MQTT Sensor Data to your Home Assistant.
-I assume you have connected the IR Adapter and enabled the extended Information `inf: on`.
+I assume you have connected the IR Adapter to USB `/dev/ttyUSB0` and enabled the extended information `inf: on` on the smart meter.
 
 Example `docker-compose.yml`
 

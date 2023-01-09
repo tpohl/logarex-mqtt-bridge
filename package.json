@@ -1,6 +1,12 @@
 {
   "name": "logarex-mqtt-bridge",
   "version": "1.0.0",
+  "license": "MIT",
+  "author": {
+    "name": "Thorsten Pohl",
+    "email": "thorsten@pohl.rocks",
+    "url": "https://pohl.rocks/"
+  },
   "scripts": {
     "start": "node main.js"
   },
