@@ -90,7 +90,7 @@ client.on('data', data => {
 
             // Update Counter
             updateCounter++;
-            if (updateCounter > 11 || updateCounter % 100 === 0) {
+            if (updateCounter < 11 || updateCounter % 100 === 0) {
               console.log(`Sent ${updateCounter} messages`);
             }
           }
@@ -140,7 +140,7 @@ function registerConfig() {
 
     // Update Register Counter
     registerCounter++;
-    if (registerCounter > 11 || registerCounter % 100 === 0) {
+    if (registerCounter < 11 || registerCounter % 100 === 0) {
       console.log(`Registered ${registerCounter} times`);
     }
   }
