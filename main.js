@@ -166,7 +166,7 @@ function registerSubConfig(measure, state_class = 'total_increasing', unit = 'kW
     'value_template': `{{ value_json.${measure} }}`
   };
   mqttclient.publish(`homeassistant/sensor/${config.object_id}/config`, JSON.stringify(config));
-  if (env.DEBUG || registerCounter < 11) {
+  if (env.DEBUG) {
     console.log('Registering Config', config);
   }
   return config;
