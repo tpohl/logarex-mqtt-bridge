@@ -127,7 +127,7 @@ function connect() {
 }
 
 function registerConfig() {
-  if (Date.now() > (lastRegister + env.DATA_INTERVAL)) {
+  if (Date.now() > (lastRegister + env.REGISTER_INTERVAL)) {
     lastRegister = Date.now();
     registerSubConfig('total');
     registerSubConfig('total_day');
