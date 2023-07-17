@@ -9,7 +9,7 @@ const env = {
   SERIAL_PATH: process.env.SERIAL_PATH || '/dev/ttyUSB0',
   DEBUG: process.env.DEBUG === 'true',
   DATA_INTERVAL: parseInt(process.env.DATA_INTERVAL || '30000'), // Default 30 Sec
-  REGISTER_INTERVAL: parseInt(process.env.DATA_INTERVAL || '300000'), // Default 5 mins (300 Sec)
+  REGISTER_INTERVAL: parseInt(process.env.DATA_INTERVAL || '300000') // Default 5 mins (300 Sec)
 };
 
 let client;
@@ -78,24 +78,24 @@ client.on('data', data => {
         }
         if (Object.keys(dataPoint).length >= 8) {
           if (Date.now() > (lastUpdate + env.DATA_INTERVAL)) {
-            if (env.DEBUG) {
+            if (env.DEBUG || updateCounter < 11) {
               console.log('Sending Data Point', dataPoint);
             }
             //Reregister
             registerConfig();
-            
+
             // Send
             lastUpdate = Date.now();
             mqttclient.publish(env.MQTT_TOPIC, JSON.stringify(dataPoint));
 
             // Update Counter
-            updateCounter ++;
-            if (updateCounter % 100 === 0){
+            updateCounter++;
+            if (updateCounter > 11 || updateCounter % 100 === 0) {
               console.log(`Sent ${updateCounter} messages`);
             }
           }
         }
-        
+
         received = '';
       }
     }
@@ -111,6 +111,7 @@ function connect() {
   // Send Autoconfig to Home Assistant
   registerConfig();
   clientConnect();
+  console.log('Connected');
 }
 
 function registerConfig() {
@@ -126,8 +127,8 @@ function registerConfig() {
     registerSubConfig('current_power', 'measurement', 'W', 'power');
 
     // Update Register Counter
-    registerCounter ++;
-    if (registerCounter % 100 === 0){
+    registerCounter++;
+    if (registerCounter > 11 || registerCounter % 100 === 0) {
       console.log(`Registered ${registerCounter} times`);
     }
   }
@@ -153,7 +154,7 @@ function registerSubConfig(measure, state_class = 'total_increasing', unit = 'kW
     'value_template': `{{ value_json.${measure} }}`
   };
   mqttclient.publish(`homeassistant/sensor/${config.object_id}/config`, JSON.stringify(config));
-  if (env.DEBUG) {
+  if (env.DEBUG || registerCounter < 11) {
     console.log('Registering Config', config);
   }
   return config;
