@@ -135,22 +135,22 @@ function registerConfig() {
 
 function registerSubConfig(measure, state_class = 'total_increasing', unit = 'kWh', device_class = 'energy') {
   const config = {
-    object_id: `energy_${env.POWER_TYPE}_${measure}`,
-    entity_id: `energy_${env.POWER_TYPE}_${measure}`,
-    unique_id: `energy_${env.POWER_TYPE}_${measure}`,
+    'object_id': `energy_${env.POWER_TYPE}_${measure}`,
+    'entity_id': `energy_${env.POWER_TYPE}_${measure}`,
+    'unique_id': `energy_${env.POWER_TYPE}_${measure}`,
     name: `Energy ${env.POWER_TYPE} ${measure}`,
-    state_topic: env.MQTT_TOPIC,
-    state_class: state_class,
-    device_class: device_class,
+    'state_topic': env.MQTT_TOPIC,
+    'state_class': state_class,
+    'device_class': device_class,
     device: {
       identifiers: `logarex-meter-${env.POWER_TYPE}`,
       name: `Electricity Meter ${env.POWER_TYPE}`,
       model: `Logarex`,
       suggested_area: `${env.AREA}`,
-      via_device: `logarex-mqtt-bridge-${env.POWER_TYPE}`
+      'via_device': `logarex-mqtt-bridge-${env.POWER_TYPE}`
     },
-    unit_of_measurement: unit,
-    value_template: `{{ value_json.${measure} }}`
+    'unit_of_measurement': unit,
+    'value_template': `{{ value_json.${measure} }}`
   };
   mqttclient.publish(`homeassistant/sensor/${config.object_id}/config`, JSON.stringify(config));
   if (env.DEBUG) {
