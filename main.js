@@ -60,6 +60,8 @@ client.on('data', data => {
         for (let line of lines) {
           if (line.startsWith('1-0:1.8.0*255(')) {
             dataPoint['total'] = parseFloat(line.substring(14, 25));
+          } else if (line.startsWith('1-0:2.8.0*255(')) {
+            dataPoint['total_to_grid'] = parseFloat(line.substring(14, 25));
           } else if (line.startsWith('1-0:1.8.1*255(')) {
             dataPoint['total_day'] = parseFloat(line.substring(14, 25));
           } else if (line.startsWith('1-0:1.8.2*255(')) {
@@ -130,6 +132,7 @@ function registerConfig() {
   if (Date.now() > (lastRegister + env.REGISTER_INTERVAL)) {
     lastRegister = Date.now();
     registerSubConfig('total');
+    registerSubConfig('total_to_grid');
     registerSubConfig('total_day');
     registerSubConfig('total_night');
     registerSubConfig('total_1d', 'total');
