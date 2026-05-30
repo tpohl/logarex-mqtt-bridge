@@ -14,6 +14,15 @@ const env = {
 
 let client;
 
+let reconnectTimeout;
+function scheduleReconnect() {
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  console.log('Scheduling reconnection in 5 seconds...');
+  reconnectTimeout = setTimeout(() => {
+    connect();
+  }, 5000);
+}
+
 let clientConnect = function () {
   console.warn('Client Connect not configured');
 };
@@ -23,24 +32,55 @@ if (env.MODE === 'socket') {
   const socket = new net.Socket();
   client = socket;
   clientConnect = function () {
+    console.log(`Connecting to socket at ${env.SOCKET_HOST}:${env.SOCKET_PORT}...`);
     socket.connect(env.SOCKET_PORT, env.SOCKET_HOST);
   };
+  socket.on('error', err => {
+    console.error('Socket error:', err.message);
+  });
 } else if (env.MODE === 'serial') {
   const { SerialPortStream } = require('@serialport/stream');
   const { autoDetect } = require('@serialport/bindings-cpp');
   const binding = autoDetect();
-  const serialPort = new SerialPortStream({ binding, path: env.SERIAL_PATH, baudRate: 9600, autoOpen: true });
+  const serialPort = new SerialPortStream({ binding, path: env.SERIAL_PATH, baudRate: 9600, autoOpen: false });
   client = serialPort;
   clientConnect = function () {
-    // Do nothing, auto opening.
+    if (!serialPort.isOpen) {
+      console.log(`Opening serial port ${env.SERIAL_PATH}...`);
+      serialPort.open(err => {
+        if (err) {
+          console.error('Error opening serial port:', err.message);
+          scheduleReconnect();
+        }
+      });
+    }
   };
+  serialPort.on('error', err => {
+    console.error('SerialPort error:', err.message);
+  });
 } else {
-  console.warn(' Please define a valid MODE (either "serial" or "socket"');
+  console.warn(' Please define a valid MODE (either "serial" or "socket")');
 }
 
 
 const mqtt = require('mqtt');
 const mqttclient = mqtt.connect(`mqtt://${env.MQTT_HOST}`);
+
+mqttclient.on('connect', () => {
+  console.log('MQTT Client connected successfully');
+});
+mqttclient.on('reconnect', () => {
+  console.log('MQTT Client reconnecting...');
+});
+mqttclient.on('close', () => {
+  console.log('MQTT Client connection closed');
+});
+mqttclient.on('offline', () => {
+  console.log('MQTT Client offline');
+});
+mqttclient.on('error', err => {
+  console.error('MQTT Client error:', err.message);
+});
 
 let received = '';
 let lastUpdate = Date.parse('01 Jan 1970 00:00:00 GMT');
@@ -52,9 +92,10 @@ let registerCounter = 0;
 const lastValidValues = {};
 
 client.on('data', data => {
-  received += data;
+  received += data.toString();
   const messages = received.split('!');
   if (messages.length > 1) {
+    received = messages.pop();
     for (let message of messages) {
       if (message !== '') {
 
@@ -127,15 +168,13 @@ client.on('data', data => {
             }
           }
         }
-
-        received = '';
       }
     }
   }
 });
 client.on('close', () => {
-  connect();
-  console.log('connection closed');
+  console.log('Connection closed.');
+  scheduleReconnect();
 });
 
 
@@ -206,3 +245,23 @@ function registerSubConfig(measure, state_class = 'total_increasing', unit = 'kW
 }
 
 connect();
+
+// Graceful shutdown
+const shutdown = () => {
+  console.log('Shutdown signal received. Closing connections...');
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  if (client) {
+    if (env.MODE === 'socket') {
+      client.destroy();
+    } else if (env.MODE === 'serial') {
+      client.close();
+    }
+  }
+  if (mqttclient) {
+    mqttclient.end();
+  }
+  process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
