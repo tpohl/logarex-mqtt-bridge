@@ -11,8 +11,8 @@
     "start": "node main.js"
   },
   "dependencies": {
-    "@serialport/bindings-cpp": "^10.8.0",
-    "@serialport/stream": "^10.5.0",
-    "mqtt": "^4.3.7"
+    "@serialport/bindings-cpp": "^13.0.1",
+    "@serialport/stream": "^13.0.0",
+    "mqtt": "^5.15.1"
   }
 }
