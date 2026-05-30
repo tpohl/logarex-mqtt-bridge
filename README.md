@@ -6,15 +6,23 @@ I assume you have connected the IR Adapter to USB `/dev/ttyUSB0` and enabled the
 Example `docker-compose.yml`
 
 ```yaml
-version: "3.9"
 services:
   main-power:
     build: .
     environment:
+      AREA: House
       MQTT_HOST: 192.168.1.2
       POWERTYPE: main
       MODE: 'serial'
       SERIAL_PATH: '/dev/ttyUSB0'
+      PERSIST_PATH: '/app/data'
+    restart: unless-stopped
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
+    volumes:
+      - logarex-data:/app/data
+
+volumes:
+  logarex-data:
 ```
+

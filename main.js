@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 const env = {
   AREA: process.env.AREA || 'house',
   MQTT_HOST: process.env.MQTT_HOST || '192.168.178.100',
@@ -9,8 +12,11 @@ const env = {
   SERIAL_PATH: process.env.SERIAL_PATH || '/dev/ttyUSB0',
   DEBUG: process.env.DEBUG === 'true',
   DATA_INTERVAL: parseInt(process.env.DATA_INTERVAL || '30000'), // Default 30 Sec
-  REGISTER_INTERVAL: parseInt(process.env.DATA_INTERVAL || '300000') // Default 5 mins (300 Sec)
+  REGISTER_INTERVAL: parseInt(process.env.DATA_INTERVAL || '300000'), // Default 5 mins (300 Sec)
+  PERSIST_PATH: process.env.PERSIST_PATH || './data'
 };
+
+const stateFilePath = path.join(env.PERSIST_PATH, `last_values_${env.POWER_TYPE}.json`);
 
 let client;
 
@@ -91,6 +97,43 @@ let registerCounter = 0;
 // Saves last valid values to detect jumps
 const lastValidValues = {};
 
+function loadState() {
+  try {
+    if (fs.existsSync(stateFilePath)) {
+      const dataStr = fs.readFileSync(stateFilePath, 'utf8');
+      const parsed = JSON.parse(dataStr);
+      if (parsed && typeof parsed === 'object') {
+        Object.assign(lastValidValues, parsed);
+        console.log(`Loaded last valid values from ${stateFilePath}:`, lastValidValues);
+      }
+    } else {
+      console.log(`No previous state file found at ${stateFilePath}. Starting fresh.`);
+    }
+  } catch (err) {
+    console.warn(`Could not load previous state from ${stateFilePath}:`, err.message);
+  }
+}
+
+async function saveState() {
+  try {
+    const dir = path.dirname(stateFilePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const tempPath = `${stateFilePath}.tmp`;
+    const dataStr = JSON.stringify(lastValidValues, null, 2);
+    
+    await fs.promises.writeFile(tempPath, dataStr, 'utf8');
+    await fs.promises.rename(tempPath, stateFilePath);
+    
+    if (env.DEBUG) {
+      console.log('Successfully persisted last valid values:', lastValidValues);
+    }
+  } catch (err) {
+    console.error('Failed to persist last valid values:', err.message);
+  }
+}
+
 client.on('data', data => {
   received += data.toString();
   const messages = received.split('!');
@@ -160,6 +203,9 @@ client.on('data', data => {
             // Send
             lastUpdate = Date.now();
             mqttclient.publish(env.MQTT_TOPIC, JSON.stringify(dataPoint));
+
+            // Save state to disk asynchronously
+            saveState();
 
             // Update Counter
             updateCounter++;
@@ -244,6 +290,7 @@ function registerSubConfig(measure, state_class = 'total_increasing', unit = 'kW
   return config;
 }
 
+loadState();
 connect();
 
 // Graceful shutdown
