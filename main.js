@@ -48,6 +48,9 @@ let lastRegister = Date.parse('01 Jan 1970 00:00:00 GMT');
 let updateCounter = 0;
 let registerCounter = 0;
 
+// Saves last valid values to detect jumps
+const lastValidValues = {};
+
 client.on('data', data => {
   received += data;
   const messages = received.split('!');
@@ -80,6 +83,33 @@ client.on('data', data => {
         }
         if (Object.keys(dataPoint).length >= 8) {
           if (Date.now() > (lastUpdate + env.DATA_INTERVAL)) {
+
+            // Check Plausibility of the measures
+            const measuresToCheck = ['total', 'total_to_grid', 'total_day', 'total_night'];
+            let isDataPlausible = true;
+
+            for (const measure of measuresToCheck) {
+              if (dataPoint[measure] !== undefined && !isNaN(dataPoint[measure])) {
+                const newValue = dataPoint[measure];
+                const oldValue = lastValidValues[measure];
+
+                if (oldValue !== undefined) {
+                  const diff = newValue - oldValue;
+
+                  // If value is decreasing or jumping by more than 10 kWh -> Unplausible!
+                  if (diff < 0 || diff > 10) {
+                    console.warn(`⚠️ BLOCKED: Jump at ${measure}! old: ${oldValue}, new: ${newValue} (Diff: ${diff} kWh)`);
+                    isDataPlausible = false;
+                    dataPoint[measure] = oldValue;
+                  }
+                }
+
+                if (isDataPlausible || oldValue === undefined) {
+                  lastValidValues[measure] = dataPoint[measure];
+                }
+              }
+            }
+
             if (env.DEBUG || updateCounter < 11) {
               console.log('Sending Data Point', dataPoint);
             }
@@ -114,7 +144,7 @@ function connect() {
   registerConfig();
   clientConnect();
   console.log(
-  `
+    `
    __        ______     _______      ___      .______       __________   ___    .___  ___.   ______     .___________.___________.
   |  |      /  __  \\   /  _____|    /   \\     |   _  \\     |   ____\\  \\ /  /    |   \\/   |  /  __  \\    |           |           |
   |  |     |  |  |  | |  |  __     /  ^  \\    |  |_)  |    |  |__   \\  V  /     |  \\  /  | |  |  |  |   \`---|  |----\`---|  |----\`
