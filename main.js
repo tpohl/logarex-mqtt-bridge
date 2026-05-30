@@ -16,7 +16,9 @@ const env = {
   PERSIST_PATH: process.env.PERSIST_PATH || './data'
 };
 
-const stateFilePath = path.join(env.PERSIST_PATH, `last_values_${env.POWER_TYPE}.json`);
+function getStateFilePath() {
+  return path.join(env.PERSIST_PATH, `last_values_${env.POWER_TYPE}.json`);
+}
 
 let client;
 
@@ -98,33 +100,35 @@ let registerCounter = 0;
 const lastValidValues = {};
 
 function loadState() {
+  const filePath = getStateFilePath();
   try {
-    if (fs.existsSync(stateFilePath)) {
-      const dataStr = fs.readFileSync(stateFilePath, 'utf8');
+    if (fs.existsSync(filePath)) {
+      const dataStr = fs.readFileSync(filePath, 'utf8');
       const parsed = JSON.parse(dataStr);
       if (parsed && typeof parsed === 'object') {
         Object.assign(lastValidValues, parsed);
-        console.log(`Loaded last valid values from ${stateFilePath}:`, lastValidValues);
+        console.log(`Loaded last valid values from ${filePath}:`, lastValidValues);
       }
     } else {
-      console.log(`No previous state file found at ${stateFilePath}. Starting fresh.`);
+      console.log(`No previous state file found at ${filePath}. Starting fresh.`);
     }
   } catch (err) {
-    console.warn(`Could not load previous state from ${stateFilePath}:`, err.message);
+    console.warn(`Could not load previous state from ${filePath}:`, err.message);
   }
 }
 
 async function saveState() {
+  const filePath = getStateFilePath();
   try {
-    const dir = path.dirname(stateFilePath);
+    const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    const tempPath = `${stateFilePath}.tmp`;
+    const tempPath = `${filePath}.tmp`;
     const dataStr = JSON.stringify(lastValidValues, null, 2);
     
     await fs.promises.writeFile(tempPath, dataStr, 'utf8');
-    await fs.promises.rename(tempPath, stateFilePath);
+    await fs.promises.rename(tempPath, filePath);
     
     if (env.DEBUG) {
       console.log('Successfully persisted last valid values:', lastValidValues);
@@ -134,6 +138,61 @@ async function saveState() {
   }
 }
 
+function parseMessage(message) {
+  let dataPoint = {};
+  const lines = message.split('\n');
+  for (let line of lines) {
+    if (line.startsWith('1-0:1.8.0*255(')) {
+      dataPoint['total'] = parseFloat(line.substring(14, 25));
+    } else if (line.startsWith('1-0:2.8.0*255(')) {
+      dataPoint['total_to_grid'] = parseFloat(line.substring(14, 25));
+    } else if (line.startsWith('1-0:1.8.1*255(')) {
+      dataPoint['total_day'] = parseFloat(line.substring(14, 25));
+    } else if (line.startsWith('1-0:1.8.2*255(')) {
+      dataPoint['total_night'] = parseFloat(line.substring(14, 25));
+    } else if (line.startsWith('1-0:1.8.0*96(')) {
+      dataPoint['total_1d'] = parseFloat(line.substring(13, 24));
+    } else if (line.startsWith('1-0:1.8.0*97(')) {
+      dataPoint['total_7d'] = parseFloat(line.substring(13, 24));
+    } else if (line.startsWith('1-0:1.8.0*98(')) {
+      dataPoint['total_30d'] = parseFloat(line.substring(13, 24));
+    } else if (line.startsWith('1-0:1.8.0*99(')) {
+      dataPoint['total_365d'] = parseFloat(line.substring(13, 24));
+    } else if (line.startsWith('1-0:16.7.0*255(')) {
+      dataPoint['current_power'] = parseFloat(line.substring(15, 21));
+    }
+  }
+  return dataPoint;
+}
+
+function validatePlausibility(dataPoint) {
+  const measuresToCheck = ['total', 'total_to_grid', 'total_day', 'total_night'];
+  let isDataPlausible = true;
+
+  for (const measure of measuresToCheck) {
+    if (dataPoint[measure] !== undefined && !isNaN(dataPoint[measure])) {
+      const newValue = dataPoint[measure];
+      const oldValue = lastValidValues[measure];
+
+      if (oldValue !== undefined) {
+        const diff = newValue - oldValue;
+
+        // If value is decreasing or jumping by more than 10 kWh -> Unplausible!
+        if (diff < 0 || diff > 10) {
+          console.warn(`⚠️ BLOCKED: Jump at ${measure}! old: ${oldValue}, new: ${newValue} (Diff: ${diff} kWh)`);
+          isDataPlausible = false;
+          dataPoint[measure] = oldValue;
+        }
+      }
+
+      if (isDataPlausible || oldValue === undefined) {
+        lastValidValues[measure] = dataPoint[measure];
+      }
+    }
+  }
+  return isDataPlausible;
+}
+
 client.on('data', data => {
   received += data.toString();
   const messages = received.split('!');
@@ -141,58 +200,10 @@ client.on('data', data => {
     received = messages.pop();
     for (let message of messages) {
       if (message !== '') {
-
-        let dataPoint = {};
-        const lines = message.split('\n');
-        for (let line of lines) {
-          if (line.startsWith('1-0:1.8.0*255(')) {
-            dataPoint['total'] = parseFloat(line.substring(14, 25));
-          } else if (line.startsWith('1-0:2.8.0*255(')) {
-            dataPoint['total_to_grid'] = parseFloat(line.substring(14, 25));
-          } else if (line.startsWith('1-0:1.8.1*255(')) {
-            dataPoint['total_day'] = parseFloat(line.substring(14, 25));
-          } else if (line.startsWith('1-0:1.8.2*255(')) {
-            dataPoint['total_night'] = parseFloat(line.substring(14, 25));
-          } else if (line.startsWith('1-0:1.8.0*96(')) {
-            dataPoint['total_1d'] = parseFloat(line.substring(13, 24));
-          } else if (line.startsWith('1-0:1.8.0*97(')) {
-            dataPoint['total_7d'] = parseFloat(line.substring(13, 24));
-          } else if (line.startsWith('1-0:1.8.0*98(')) {
-            dataPoint['total_30d'] = parseFloat(line.substring(13, 24));
-          } else if (line.startsWith('1-0:1.8.0*99(')) {
-            dataPoint['total_365d'] = parseFloat(line.substring(13, 24));
-          } else if (line.startsWith('1-0:16.7.0*255(')) {
-            dataPoint['current_power'] = parseFloat(line.substring(15, 21));
-          }
-        }
+        const dataPoint = parseMessage(message);
         if (Object.keys(dataPoint).length >= 8) {
           if (Date.now() > (lastUpdate + env.DATA_INTERVAL)) {
-
-            // Check Plausibility of the measures
-            const measuresToCheck = ['total', 'total_to_grid', 'total_day', 'total_night'];
-            let isDataPlausible = true;
-
-            for (const measure of measuresToCheck) {
-              if (dataPoint[measure] !== undefined && !isNaN(dataPoint[measure])) {
-                const newValue = dataPoint[measure];
-                const oldValue = lastValidValues[measure];
-
-                if (oldValue !== undefined) {
-                  const diff = newValue - oldValue;
-
-                  // If value is decreasing or jumping by more than 10 kWh -> Unplausible!
-                  if (diff < 0 || diff > 10) {
-                    console.warn(`⚠️ BLOCKED: Jump at ${measure}! old: ${oldValue}, new: ${newValue} (Diff: ${diff} kWh)`);
-                    isDataPlausible = false;
-                    dataPoint[measure] = oldValue;
-                  }
-                }
-
-                if (isDataPlausible || oldValue === undefined) {
-                  lastValidValues[measure] = dataPoint[measure];
-                }
-              }
-            }
+            validatePlausibility(dataPoint);
 
             if (env.DEBUG || updateCounter < 11) {
               console.log('Sending Data Point', dataPoint);
@@ -290,8 +301,10 @@ function registerSubConfig(measure, state_class = 'total_increasing', unit = 'kW
   return config;
 }
 
-loadState();
-connect();
+if (require.main === module) {
+  loadState();
+  connect();
+}
 
 // Graceful shutdown
 const shutdown = () => {
@@ -312,3 +325,13 @@ const shutdown = () => {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+module.exports = {
+  env,
+  lastValidValues,
+  parseMessage,
+  validatePlausibility,
+  loadState,
+  saveState,
+  getStateFilePath
+};
